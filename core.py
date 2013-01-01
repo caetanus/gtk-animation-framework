@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
+import gobject
 
 class StepError(Exception):
+    pass
+
+class AnimationError(Exception):
     pass
 
 class _GtkAnimationSteps(object):
     def __init__(self):
         self._to = None
         self.acceleration = 1.0
+        self.factor = 1
 
     @property
     def to(self):
@@ -28,13 +33,26 @@ class _GtkAnimationSteps(object):
             raise TypeError, "Value must be a number."
         self._acceleration = float(value)
 
+    @property
+    def factor(self):
+        return self._factor
+
+    @factor.setter
+    def factor(self, value):
+        if type(value) not in (int, float):
+            raise TypeError, "Value must be a number."
+        self._factor = int(value)
+
 
 class GtkAnimation(object):
     """Gtk2 Animation framework with some facilities"""
-    def __init__(self, arg, interval=0.1,
-                 from=None, to=None, acceleration=None):
-        self.timer = []
+    def __init__(self, interval=0.1, from_=None, 
+                 to=None, acceleration=None):
+        self.timer = None
         self.steps = []
+        self._callback = None
+        self._position = None
+        self.current_step = None
         if any(to, acceleration) 
             if not all(to, acceleration):
                 raise TypeError, "you must set acceleration and to parameters together, or none of them."
@@ -42,6 +60,14 @@ class GtkAnimation(object):
                 step = self.step()
                 step.to = to
                 step.acceleration = acceleration
+        self.interval = interval
+
+        self._start_value = from_
+
+
+    def set_function(self, function):
+        assert callable(function)
+        self._callback = function
 
     @property
     def start_value(self):
@@ -89,10 +115,37 @@ class GtkAnimation(object):
 
     def start(self):
         map(self._validate_steps, self.steps)
+        if not callable(self._callback):
+            raise AnimationError, "do self.set_function, before start."
+        if self.start_value is None:
+            raise AnimationError, "animation needs an start value."
+        self.current_step = (0, self.step[0])
+        self._position = self.start_value
+        self._iteration()
 
     def _iteration(self):
+        self._callback(self.value)
+        step_index, step = self.current_step
+        step.factor *= step.acceleration
+        self.interval /= self.acceleration
+        if self.timer:
+            gobject.source_remove(self.timer)
+
+        self.value += step.factor
+        if step.to >= self.value:
+            self._next_step()
+        self.timer = gobject.timeout_add(self.interval * 1000,
+                                          self._iteration)
         
-        
+
+    def _next_step(self):
+        step_index, step = self.current_step
+        step_index+=1
+
+    def _end_animation(self):
+        pass
+    
+
 
 if __name__ == '__main__':
     w = gtk.Window()
