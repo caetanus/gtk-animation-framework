@@ -61,7 +61,7 @@ class _GtkAnimationSteps(gobject.GObject):
 
 class GtkAnimation(gobject.GObject):
     """Gtk2 Animation framework with some facilities"""
-    def __init__(self, interval=0.1, from_=None, 
+    def __init__(self, interval=0.3, from_=None, 
                  to=None, acceleration=None):
         self.__gobject_init__()
         self.timer = None
@@ -80,7 +80,6 @@ class GtkAnimation(gobject.GObject):
         self.interval = interval
 
         self._start_value = from_
-
 
     def set_function(self, function):
         assert callable(function)
@@ -161,14 +160,17 @@ class GtkAnimation(gobject.GObject):
         print self.value, "iteration"
         step_index, step = self.current_step
         if step.is_step_end():
+            
             return self._next_step()
         step.factor *= step.acceleration
-        self.interval /= step.acceleration
+        if self.interval >= 0.01:
+            self.interval /= step.acceleration
+        print self.interval
         if self.timer:
             gobject.source_remove(self.timer)
 
         self.value += step.factor
-        if step.to >= self.value:
+        if step.is_step_end():
             self._next_step()
         self.timer = gobject.timeout_add(int(self.interval * 1000),
                                           self._iteration)
@@ -177,6 +179,7 @@ class GtkAnimation(gobject.GObject):
         step_index, step = self.current_step
         step_index+=1
         try:
+            
             self.current_step = (step_index, self.steps[step_index])
             self._iteration()
         except IndexError:
@@ -199,10 +202,10 @@ if __name__ == '__main__':
     anim = GtkAnimation()
     anim.start_value = 50
     step0 = anim.step()
-    step0.acceleration = 1.2 # accelerates 20% per iteration
+    step0.acceleration = 1.09 # accelerates 20% per iteration
     step0.to = 200
     step1 = anim.step()
-    step1.acceleration = 1
+    step1.acceleration = 0.7
     step1.to = 130
     step2 = anim.step()
     step2.acceleration = 0.8
@@ -215,9 +218,9 @@ if __name__ == '__main__':
     anim.connect("animation-stop", a)
 
     def resize(x):
+        screen = gtk.gdk.screen_get_default()
         w.resize(x, x)
-        sw = gtk.gdk.screen_width()
-        sh = gtk.gdk.screen_height()
+        _,_, sw, sh = screen.get_monitor_geometry(0)
         new_left = int((sw/2.) - (x/2.))
         new_top = int((sh/2.) - (x/2.))
         w.move(new_left, new_top)
