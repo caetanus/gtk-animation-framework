@@ -24,6 +24,10 @@ import random as _random
 import threading as _threading
 from gobject import io_add_watch, IO_IN
 import gtk 
+from threading import Lock
+
+_timer_lock = Lock()
+_main_running = False
 
 class _Timer(object):
     def __init__(self, interval, function, args=()):
@@ -97,6 +101,9 @@ def _timeout_add(miliseconds, callback, source=None, *args):
     global _handler_id
     global _handlers
     global _queue
+    global _timer_lock
+    global _main_running
+
     if source == None:
         _handler_id += 1
         source = _handler_id
@@ -104,31 +111,37 @@ def _timeout_add(miliseconds, callback, source=None, *args):
     seconds = miliseconds / 1000.
     def cb1(callback, source, *args):
         global _handlers
-        if source in _handlers:
-            if callback(*args) == True:
-                _timeout_add(miliseconds, callback, source, *args)
+        with _timer_lock:
+            if source in _handlers:
+                if callback(*args) == True:
+                    _timeout_add(miliseconds, callback, source, *args)
 
     def cb():
         """
         used queues to the timer be executed into the same thread
         that's hes called.
         """
+        print 'cb is called.'
+
         _queue.put((cb1, callback, source, args))
 
-    if 0: 
+    if _main_running: 
         try:
-            t = _handlers[source]
-            t.cont()
+            with _timer_lock:
+                t = _handlers[source]
+                t.cont()
         except:
-            t = _Timer(seconds, cb)
-            _handlers[source] = t
-            t.start()
+            with _timer_lock:
+                t = _Timer(seconds, cb)
+                _handlers[source] = t
+                print 'timer started.'
+                t.start()
 
     else:
         global _timeout_add_list
-        _timeout_add_list.append((seconds,cb, source))
-
-        _handlers[source] = -1
+        with _timer_lock:
+            _timeout_add_list.append((seconds,cb, source))
+            _handlers[source] = -1
 
     return source
 
@@ -177,12 +190,15 @@ def source_remove(tag):
     Returns: True if the event source was removed
     """
     global _handlers
+    global _timer_lock
+
     try:
-        if tag in _handlers:
-            if _handlers[tag] != -1:
-                _handlers[tag].cancel()
-            del _handlers[tag]
-            return True
+        with _timer_lock:
+            if tag in _handlers:
+                if _handlers[tag] != -1:
+                    _handlers[tag].cancel()
+                del _handlers[tag]
+                return True
 
         return False
 
@@ -196,43 +212,53 @@ def main():
     global _handlers
     global _queue
     global _timeout_add_list
+    global _timer_lock
+    global _main_running
+    _main_running = True
 
     if not _queue:
         _queue = _GobjectQueue()
     
     def on_queue_callback(queue):
+        print 'queue callback.'
         cb1, callback, source, args = _queue.get()
         cb1(callback, source, *args)
+        return True
 
     _queue.callback.append(on_queue_callback)
 
     #starting hanged timers
-    for i in _timeout_add_list:
-        seconds, cb, source = i
-        t = _Timer(seconds, cb)
-        t.start()
-        _handlers[source] = t
-    _timeout_add_list = []
+    with _timer_lock:
+        for i in _timeout_add_list:
+            seconds, cb, source = i
+            t = _Timer(seconds, cb)
+            t.start()
+            _handlers[source] = t
+        _timeout_add_list = []
 
 
     gtk.main()
+    _main_running = False
     _cancel_all_timers(1)
 
 def _cancel_all_timers(command=0):
     global _handlers
-    for source in _handlers:
-        try:
-            seconds = _handlers[source].interval
-            cb = _handlers[source].function
-            _handlers[source].cancel()
-        except Exception, e:
-            pass#print e, type(e)
+    global _timer_lock
 
-        if command:
-            # if the timer was stopped by a ctrl+c, so when main is called again
-            # the timer will reborn.
-            global _timeout_add_list
-            _timeout_add_list.append((seconds,cb, source))
+    with _timer_lock:
+        for source in _handlers:
+            try:
+                seconds = _handlers[source].interval
+                cb = _handlers[source].function
+                _handlers[source].cancel()
+            except Exception, e:
+                pass#print e, type(e)
+
+            if command:
+                # if the timer was stopped by a ctrl+c, so when main is called again
+                # the timer will reborn.
+                global _timeout_add_list
+                _timeout_add_list.append((seconds,cb, source))
 
 
 
@@ -258,7 +284,7 @@ class _GobjectQueue(_Queue.Queue):
 
     def put(self, data):
         _Queue.Queue.put(self, data)
-        self.sock.sendto("1", self.sock.getsockname())
+        self.sock.sendto('\0',self.sock.getsockname())
 
     def get(self, *args, **kw):
         r = _Queue.Queue.get(self, timeout=0.1)
@@ -266,7 +292,7 @@ class _GobjectQueue(_Queue.Queue):
 
     def _on_data(self, *args):
         d, a = self.sock.recvfrom(1)
-        if a != self.sock.getsockname():
+        if d != '\0' and a != self.sock.getsockname():
             return
 
         for i in self.callback:
@@ -276,6 +302,3 @@ class _GobjectQueue(_Queue.Queue):
                 pass
         return True
 
-import sys
-if sys.platform != 'win32':
-    gtk.gdk.threads_init()
