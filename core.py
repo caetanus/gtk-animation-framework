@@ -4,8 +4,8 @@ import gobject
 from gobject_queue import main, timeout_add_seconds, source_remove, timeout_add
 
 class StepError(Exception):
-    pass
-
+    """Throwed when we got an error on some step."""
+    
 class AnimationError(Exception):
     pass
 
@@ -31,7 +31,7 @@ class _GtkAnimationSteps(gobject.GObject):
             return self.parent.value
 
     def is_step_end(self):
-        if self.increment > 0:
+        if self.factor > 0:
             print self.parent.value, self.to, self.parent.value >= self.to
             return self.parent.value >= self.to
         else:
@@ -190,8 +190,6 @@ class GtkAnimation(gobject.GObject):
             self.interval /= step.acceleration
         print self.interval
         step.incrementer()
-        if step.is_step_end():
-            self._next_step()
         self.timer = timeout_add_seconds(self.interval, self._iteration)
         
     def _next_step(self):
@@ -225,7 +223,7 @@ if __name__ == '__main__':
     anim = GtkAnimation()
     anim.start_value = 50
     step0 = anim.step()
-    step0.acceleration = 1.009 # accelerates 20% per iteration
+    step0.acceleration = 1.09 # accelerates 20% per iteration
     step0.to = 200
     step0.factor = 1.3
     step1 = anim.step()
