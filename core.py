@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 import gtk
 import gobject
-from gobject_queue import main, timeout_add_seconds, source_remove, timeout_add
+#from gobject_queue import main, timeout_add_seconds, source_remove, timeout_add
+from gtk import main
+from gobject import source_remove, timeout_add
+def timeout_add_seconds(timeout, callback, *args):
+    return gobject.timeout_add(int(timeout*1000), callback, *args)
 
 class StepError(Exception):
     """Throwed when we got an error on some step."""
@@ -16,7 +20,6 @@ class _GtkAnimationSteps(gobject.GObject):
         self._to = None
         self.acceleration = 1.0
         self.factor = 1
-        self.increment = 1
 
     def start(self):
         current_value = self.parent.value
@@ -28,6 +31,8 @@ class _GtkAnimationSteps(gobject.GObject):
 
     def incrementer(self):
             self.parent.value +=  self.factor
+            if self.factor >= 1:
+                self.factor *= self.acceleration
             return self.parent.value
 
     def is_step_end(self):
@@ -71,8 +76,8 @@ class _GtkAnimationSteps(gobject.GObject):
         try:
             self._original_factor
         except:
-            self._original_factor = int(value)
-        self._factor = int(value)
+            self._original_factor = value
+        self._factor = value
 
 
 class GtkAnimation(gobject.GObject):
@@ -130,13 +135,18 @@ class GtkAnimation(gobject.GObject):
         if type(value) is not int and value > 0:
             raise TypeError, "value must be an integer greater than 0."
 
-        self.connect("animation-stop", self.reload)
+        self.connect("internal-animation-stop", self.reload)
         self._times = value
 
     def reload(self, *args):
         if self._reload_iteration < self._times:
             self._reload_iteration += 1
+            print "reload time", self._reload_iteration
             self.start()
+        else:    
+            self._reload_iteration = 0
+            self.reset()
+            self.emit("animation-stop")
 
     def step(self):
         step = _GtkAnimationSteps(self) 
@@ -174,43 +184,52 @@ class GtkAnimation(gobject.GObject):
 
     def _iteration(self):
         self._callback(self.value)
-        print self.value, "iteration"
         step_index, step = self.current_step
-        print step_index
-        if self.timer:
-            timer = self.timer
-            self.timer = None
-            source_remove(timer)
+        
+        self._cancel_timer()
         
         if step.is_step_end():
             return self._next_step()
 
-        #step.factor *= step.acceleration
-        if self.interval >= 0.05:
+        if self.interval >= 0.01:
             self.interval /= step.acceleration
         print self.interval
         step.incrementer()
         self.timer = timeout_add_seconds(self.interval, self._iteration)
         
+    def _cancel_timer(self):
+        if self.timer:
+            timer = self.timer
+            self.timer = None
+            source_remove(timer)
+        
     def _next_step(self):
         
         step_index, step = self.current_step
-        step_index+=1
+        step_index += 1
         try:
             
             self.current_step = (step_index, self.steps[step_index])
             self.current_step[1].start()
             timeout_add_seconds(0.01, self._iteration)
+            self._cancel_timer()
             
-            return False
         except IndexError:
-            self.emit('animation-stop')
+            self._cancel_timer()
+            self.emit('internal-animation-stop')
+            
+        return False
     
 
 gobject.type_register(_GtkAnimationSteps)
 gobject.type_register(GtkAnimation)
 
 gobject.signal_new("step-end", _GtkAnimationSteps,
+                    gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+                    ())
+
+
+gobject.signal_new("internal-animation-stop", GtkAnimation,
                     gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
                     ())
 
@@ -233,13 +252,18 @@ if __name__ == '__main__':
     step2.acceleration = 1.01
     step2.to = 50
     anim.times = 3
-    
+    count_times = 0 
     def a(anim):
+        global count_times
         print "animation stopped"
+        if count_times < 1:
+            count_times = 1
+            anim.start()
 
     anim.connect("animation-stop", a)
 
     def resize(x):
+        x = int(x)
         screen = gtk.gdk.screen_get_default()
         w.resize(x, x)
         _,_, sw, sh = screen.get_monitor_geometry(0)
