@@ -11,7 +11,7 @@
 # wing projects
 
 *.wpr
-
+*.wpu
 
 # C extensions
 *.so
