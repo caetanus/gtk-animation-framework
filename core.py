@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import gtk
 import gobject
+from gobject_queue import main, timeout_add_seconds, source_remove, timeout_add
 
 class StepError(Exception):
     pass
@@ -15,9 +16,26 @@ class _GtkAnimationSteps(gobject.GObject):
         self._to = None
         self.acceleration = 1.0
         self.factor = 1
+        self.increment = 1
+
+    def start(self):
+        current_value = self.parent.value
+        if self.to < current_value:
+            self.factor = -abs(self.factor)
+        else:
+            print 'will increment'
+            self.factor = abs(self.factor)
+
+    def incrementer(self):
+            self.parent.value +=  self.factor
+            return self.parent.value
 
     def is_step_end(self):
-        return self.parent.value >= self.to
+        if self.increment > 0:
+            print self.parent.value, self.to, self.parent.value >= self.to
+            return self.parent.value >= self.to
+        else:
+            return self.parent.value <= self.to
 
     def reset(self):
         self._factor = self._original_factor
@@ -25,8 +43,6 @@ class _GtkAnimationSteps(gobject.GObject):
     @property
     def to(self):
         return self._to
-
-
 
     @to.setter
     def to(self, value):
@@ -61,7 +77,7 @@ class _GtkAnimationSteps(gobject.GObject):
 
 class GtkAnimation(gobject.GObject):
     """Gtk2 Animation framework with some facilities"""
-    def __init__(self, interval=0.3, from_=None, 
+    def __init__(self, interval=0.09, from_=None, 
                  to=None, acceleration=None):
         self.__gobject_init__()
         self.timer = None
@@ -145,6 +161,7 @@ class GtkAnimation(gobject.GObject):
         if self.start_value is None:
             raise AnimationError, "animation needs an start value."
         self.current_step = (0, self.steps[0])
+        self.steps[0].start()
         self.value = self.start_value
         self._iteration()
 
@@ -159,29 +176,35 @@ class GtkAnimation(gobject.GObject):
         self._callback(self.value)
         print self.value, "iteration"
         step_index, step = self.current_step
+        print step_index
+        if self.timer:
+            timer = self.timer
+            self.timer = None
+            source_remove(timer)
+        
         if step.is_step_end():
-            
             return self._next_step()
-        step.factor *= step.acceleration
-        if self.interval >= 0.01:
+
+        #step.factor *= step.acceleration
+        if self.interval >= 0.05:
             self.interval /= step.acceleration
         print self.interval
-        if self.timer:
-            gobject.source_remove(self.timer)
-
-        self.value += step.factor
+        step.incrementer()
         if step.is_step_end():
             self._next_step()
-        self.timer = gobject.timeout_add(int(self.interval * 1000),
-                                          self._iteration)
+        self.timer = timeout_add_seconds(self.interval, self._iteration)
         
     def _next_step(self):
+        
         step_index, step = self.current_step
         step_index+=1
         try:
             
             self.current_step = (step_index, self.steps[step_index])
-            self._iteration()
+            self.current_step[1].start()
+            timeout_add_seconds(0.01, self._iteration)
+            
+            return False
         except IndexError:
             self.emit('animation-stop')
     
@@ -202,18 +225,19 @@ if __name__ == '__main__':
     anim = GtkAnimation()
     anim.start_value = 50
     step0 = anim.step()
-    step0.acceleration = 1.09 # accelerates 20% per iteration
+    step0.acceleration = 1.009 # accelerates 20% per iteration
     step0.to = 200
+    step0.factor = 1.3
     step1 = anim.step()
-    step1.acceleration = 0.7
+    step1.acceleration = 0.997
     step1.to = 130
     step2 = anim.step()
-    step2.acceleration = 0.8
+    step2.acceleration = 1.01
     step2.to = 50
     anim.times = 3
     
     def a(anim):
-        print "animatino stopped"
+        print "animation stopped"
 
     anim.connect("animation-stop", a)
 
@@ -228,4 +252,4 @@ if __name__ == '__main__':
     anim.set_function(resize)
     w.show()
     anim.start()
-    gtk.main()
+    main()

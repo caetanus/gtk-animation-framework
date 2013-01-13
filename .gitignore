@@ -1,7 +1,17 @@
 *.py[cod]
 
+
 # vim swp
 *.swp
+*.swo
+*.swm
+*.swn
+
+
+# wing projects
+
+*.wpr
+
 
 # C extensions
 *.so

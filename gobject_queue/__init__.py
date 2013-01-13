@@ -17,8 +17,6 @@ _queue = None
 class TimerError(Exception):
     pass
 
-
-
 class _Timer(object):
     """
     a new gobject timer replacer, because the gobject timer on python really sux.
@@ -60,6 +58,7 @@ class _Timer(object):
         self.thread.start()
 
     def cancel(self):
+        print 'timer cancelled.'
         self.cancel_event.set()
 
 
@@ -159,8 +158,6 @@ gtk.main = main
 gtk.gtk_main = gtk_main
 
 class _GobjectQueue(_Queue.Queue):
-
-
 
     def __init__(self, *args):
         self.callback = []
