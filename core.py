@@ -239,6 +239,9 @@ gobject.signal_new("animation-stop", GtkAnimation,
 
 if __name__ == '__main__':
     w = gtk.Window()
+    b = gtk.Button()
+    w.add(b)
+    b.set_label("animar!")
     anim = GtkAnimation()
     anim.start_value = 50
     step0 = anim.step()
@@ -252,13 +255,8 @@ if __name__ == '__main__':
     step2.acceleration = 1.01
     step2.to = 50
     anim.times = 3
-    count_times = 0 
     def a(anim):
-        global count_times
         print "animation stopped"
-        if count_times < 1:
-            count_times = 1
-            anim.start()
 
     anim.connect("animation-stop", a)
 
@@ -272,6 +270,8 @@ if __name__ == '__main__':
         w.move(new_left, new_top)
 
     anim.set_function(resize)
-    w.show()
-    anim.start()
+    w.show_all()
+    def animate(*args):
+        anim.start()
+    b.connect("clicked", animate)
     main()
