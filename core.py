@@ -182,6 +182,11 @@ class GtkAnimation(gobject.GObject):
         self.current_step =(0, self.steps[0])
         map(lambda x: x.reset(), self.steps)
 
+    def cancel(self):
+        self.reset()
+        self._callback(self.value)
+        self.emit("animation-canceled")
+
     def _iteration(self):
         self._callback(self.value)
         step_index, step = self.current_step
@@ -233,8 +238,12 @@ gobject.signal_new("internal-animation-stop", GtkAnimation,
                     gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
                     ())
 
-gobject.signal_new("animation-stop", GtkAnimation,
-                    gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
+gobject.signal_new("animation-stop", gtkanimation,
+                    gobject.signal_run_first, gobject.type_none,
+                    ())
+
+gobject.signal_new("animation-canceled", gtkanimation,
+                    gobject.signal_run_first, gobject.type_none,
                     ())
 
 if __name__ == '__main__':
