@@ -2,6 +2,9 @@
 
 # vim swp
 *.swp
+*.swm
+*.swn
+*.swo
 
 # C extensions
 *.so
