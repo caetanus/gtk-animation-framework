@@ -26,7 +26,6 @@ class _GtkAnimationSteps(gobject.GObject):
         if self.to < current_value:
             self.factor = -abs(self.factor)
         else:
-            print 'will increment'
             self.factor = abs(self.factor)
 
     def incrementer(self):
@@ -37,7 +36,6 @@ class _GtkAnimationSteps(gobject.GObject):
 
     def is_step_end(self):
         if self.factor > 0:
-            print self.parent.value, self.to, self.parent.value >= self.to
             return self.parent.value >= self.to
         else:
             return self.parent.value <= self.to
@@ -141,7 +139,6 @@ class GtkAnimation(gobject.GObject):
     def reload(self, *args):
         if self._reload_iteration < self._times:
             self._reload_iteration += 1
-            print "reload time", self._reload_iteration
             self.start()
         else:    
             self._reload_iteration = 0
@@ -154,7 +151,7 @@ class GtkAnimation(gobject.GObject):
         return step
 
     def _validate_step(self, step):
-        if all([step.acceleration, step.to]):
+        if all([step.acceleration, type(step.to) in (int, float)]):
             return True
         else:
             raise StepError, "Incomplete step #%d (%s)" % (
@@ -198,7 +195,6 @@ class GtkAnimation(gobject.GObject):
 
         if self.interval >= 0.01:
             self.interval /= step.acceleration
-        print self.interval
         step.incrementer()
         self.timer = timeout_add_seconds(self.interval, self._iteration)
         
@@ -238,12 +234,12 @@ gobject.signal_new("internal-animation-stop", GtkAnimation,
                     gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
                     ())
 
-gobject.signal_new("animation-stop", gtkanimation,
-                    gobject.signal_run_first, gobject.type_none,
+gobject.signal_new("animation-stop", GtkAnimation,
+                    gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
                     ())
 
-gobject.signal_new("animation-canceled", gtkanimation,
-                    gobject.signal_run_first, gobject.type_none,
+gobject.signal_new("animation-canceled", GtkAnimation,
+                    gobject.SIGNAL_RUN_FIRST, gobject.TYPE_NONE,
                     ())
 
 if __name__ == '__main__':
