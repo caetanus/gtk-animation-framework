@@ -32,6 +32,13 @@ class _GtkAnimationSteps(gobject.GObject):
             self.parent.value +=  self.factor
             if self.factor >= 1:
                 self.factor *= self.acceleration
+                if self.parent.value > self.to:
+                    self.parent.value = self.to 
+            else:
+                self.factor = -abs(self.factor * self.acceleration)
+                if self.parent.value < self.to:
+                    self.parent.value = self.to
+                
             return self.parent.value
 
     def is_step_end(self):
@@ -185,7 +192,7 @@ class GtkAnimation(gobject.GObject):
         self.emit("animation-canceled")
 
     def _iteration(self):
-        self._callback(self.value)
+        self._callback(int(self.value))
         step_index, step = self.current_step
         
         self._cancel_timer()
@@ -193,8 +200,9 @@ class GtkAnimation(gobject.GObject):
         if step.is_step_end():
             return self._next_step()
 
-        if self.interval >= 0.01:
+        if self.interval >= 0.001:
             self.interval /= step.acceleration
+            
         step.incrementer()
         self.timer = timeout_add_seconds(self.interval, self._iteration)
         
