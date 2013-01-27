@@ -32,10 +32,14 @@ class _GtkAnimationSteps(gobject.GObject):
             self.parent.value +=  self.factor
             if self.factor >= 1:
                 self.factor *= self.acceleration
-                if self.parent.value > self.to:
+                if self.factor < 0.5:
+                    self.factor = 0.5
+                if self.parent.value >= self.to:
                     self.parent.value = self.to 
             else:
                 self.factor = -abs(self.factor * self.acceleration)
+                if self.factor > -.5:
+                    self.factor = -.5
                 if self.parent.value < self.to:
                     self.parent.value = self.to
                 
@@ -94,6 +98,8 @@ class GtkAnimation(gobject.GObject):
         self.steps = []
         self._reload_iteration = 0
         self._callback = None
+        self._running = False
+        self._times = 1
         self.value = None
         self.current_step = None
         if any((to, acceleration)): 
@@ -110,6 +116,10 @@ class GtkAnimation(gobject.GObject):
     def set_function(self, function):
         assert callable(function)
         self._callback = function
+        
+    @property
+    def running(self):
+        return self._running
 
     @property
     def start_value(self):
@@ -133,7 +143,7 @@ class GtkAnimation(gobject.GObject):
 
     @property
     def times(self):
-        return _times
+        return self._times
 
     @times.setter
     def times(self, value):
@@ -144,12 +154,13 @@ class GtkAnimation(gobject.GObject):
         self._times = value
 
     def reload(self, *args):
-        if self._reload_iteration < self._times:
+        if self._reload_iteration < self._times and self._times:
             self._reload_iteration += 1
             self.start()
         else:    
             self._reload_iteration = 0
             self.reset()
+            self._running = False
             self.emit("animation-stop")
 
     def step(self):
@@ -166,6 +177,7 @@ class GtkAnimation(gobject.GObject):
                                     step
                                     )
     def start(self):
+        self._running = True 
         self.reset()
         map(self._validate_step, self.steps)
         if not callable(self._callback):
@@ -188,11 +200,11 @@ class GtkAnimation(gobject.GObject):
 
     def cancel(self):
         self.reset()
-        self._callback(self.value)
+        self._callback(self, self.value)
         self.emit("animation-canceled")
 
     def _iteration(self):
-        self._callback(int(self.value))
+        self._callback(self, int(self.value))
         step_index, step = self.current_step
         
         self._cancel_timer()
@@ -226,6 +238,7 @@ class GtkAnimation(gobject.GObject):
         except IndexError:
             self._cancel_timer()
             self.emit('internal-animation-stop')
+            self.reload()
             
         return False
     
@@ -273,7 +286,7 @@ if __name__ == '__main__':
 
     anim.connect("animation-stop", a)
 
-    def resize(x):
+    def resize(anim, x):
         x = int(x)
         screen = gtk.gdk.screen_get_default()
         w.resize(x, x)
